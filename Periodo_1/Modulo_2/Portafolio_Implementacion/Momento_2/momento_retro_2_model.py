@@ -116,6 +116,7 @@ res.Accuracy_normal = [f"{x:.2f} %" for x in results_normal]
 res.Accuracy_pca = [f"{x:.2f} %" for x in results_pca]
 print(res)
 
+# Conclusiones
 temp = len("Conclusiones")
 temp2 = int(temp/2)
 print("-" * (49-temp2), "Conclusiones", "-" * (49-temp2))
