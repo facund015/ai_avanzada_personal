@@ -1,0 +1,327 @@
+---
+title: "Momento de Retroalimentacion 2 - Modulo 1"
+author: "Facundo Vecchi A01283666"
+date: "8 de septiembre de 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(printr)
+```
+
+
+```{r include=FALSE}
+library(dplyr)
+library(modeest)
+library(Hmisc)
+library(reshape2)
+library(ggplot2)
+library(car)
+library(MASS)
+library(lmtest)
+
+data <- read.csv("mercurio.csv")
+colnames(data) <- c("Id", "Lago", "Alcalinidad", "PH", "Calcio", "Clorofila", "con_med_mercurio",
+                    "num_peces", "min_con_mercurio", "max_con_mercurio", "prom_mercurio_pez", "edad")
+
+```
+
+## Descripcion de datos
+```{r}
+data_temp <- subset(data, select = -Id)
+
+for (col in names(data_temp)) {
+  if (class(data_temp[, col]) == "integer" | class(data_temp[, col]) == "numeric") {
+    c <- nchar(col)
+    cl <- 0
+    cr <- 0
+    if (c %% 2 != 0) {
+      cl <- c / 2
+      cr <- c / 2
+    } else {
+      cl <- c / 2
+      cr <- c / 2 + 1
+    }
+
+
+    cat(strrep('-', 30 - cl), col, strrep('-', 30 - cr), "\n")
+    cat("Promedio: ", mean(data_temp[, col]), " ",
+        "Mediana: ", median(data_temp[, col]), " ",
+        "Moda: ", mfv(data_temp[, col]), "\n")
+    cat("Desviacion estandar: ", sd(data_temp[, col]),
+        " ", "Varianza: ", var(data_temp[, col]), "\n")
+    cat("Minimo: ", min(data_temp[, col]), " ",
+        "Maximo: ", max(data_temp[, col]), "\n")
+    cat("\n")
+  }
+}
+
+for (col in names(data_temp)) {
+  if (class(data_temp[, col]) == "character") {
+    c <- nchar(col)
+    cl <- 0
+    cr <- 0
+    if (c %% 2 != 0) {
+      cl <- c / 2
+      cr <- c / 2
+    } else {
+      cl <- c / 2
+      cr <- c / 2 + 1
+    }
+
+
+    cat(strrep('-', 30 - cl), col, strrep('-', 30 - cr), "\n")
+    cat("Moda: ", mfv(data_temp[, col]), "\n")
+    cat("\n")
+    print(table(data_temp[, col]))
+    cat("\n")
+  }
+}
+```
+
+## Quartiles
+```{r}
+
+for (col in names(data_temp)) {
+  if (class(data_temp[, col]) == "integer" | class(data_temp[, col]) == "numeric") {
+    x <- data_temp[, col]
+    q <- quantile(x, c(0.25, 0.75))
+    ri <- q[2] - q[1]
+
+    c <- nchar(col)
+    cl <- 0
+    cr <- 0
+    if (c %% 2 != 0) {
+      cl <- c / 2
+      cr <- c / 2
+    } else {
+      cl <- c / 2
+      cr <- c / 2 + 1
+    }
+
+
+    cat(strrep('-', 30 - cl), col, strrep('-', 30 - cr), "\n")
+    cat("Quartil 1: ", q[1], " ", "Quartil 3: ", q[2], "\n")
+    # boxplot(x, main = col, las = 2, xlab = "", ylab = "", horizontal = TRUE)
+    # abline(v = q[1] - 1.5 * ri, lty = 2, col = "red")
+    # abline(v = q[2] + 1.5 * ri, lty = 2, col = "red")
+    # abline(v = q[1] - 3 * ri, lty = 2, col = "blue")
+    # abline(v = q[2] + 3 * ri, lty = 2, col = "blue")
+  }
+}
+
+```
+
+
+
+## Histogramas de las variables
+```{r warning=FALSE}
+data_nums_only <- subset(data, select = -c(Id, Lago))
+hist.data.frame(data_nums_only, nclass = 10)
+```
+
+Podemos observar que varias de las variables tienen un sesgo a la derecha, lo que indica que la mayoria de los datos se encuentran en la parte izquierda de la distribucion. Esto puede deberse a que los datos fueron tomados de una poblacion que no es normal, o que la muestra no es representativa de la poblacion.
+
+## Matriz de correlacion
+```{r}
+corr_mat <- cor(data_nums_only)
+corr_mat <- melt(corr_mat)
+
+ggplot(corr_mat, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  geom_text(aes(label = round(value, 2)), size = 3) +
+  scale_fill_gradient2(low = "red", mid = "white", high = "skyblue", midpoint = 0, limit = c(-1, 1), space = "Lab", name = "Correlation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_fixed()
+```
+```{r}
+plot(data_nums_only)
+```
+
+Podemos observar que todas las variables a excepcion de num_peces y edad tienen correlacion moderadas o altas con otras variables. Esto indica que se tendran que eliminar algunas variables para evitar multicolinealidad. Como sabemos que la variable con_med_mercurio es la que queremos predecir, nos quedaremos con las variables que tengan una correlacion alta con esta. Esto nos deja con las variables Alcalinidad, PH, Calcio, Clorofila, min_con_mercurio, max_con_mercurio y prom_mercurio_pez. Analizando las correlaciones entre estas variables, podemos ver que las variables min_con_mercurio, max_con_mercurio y prom_mercurio_pez tienen una correlacion alta entre si, por lo que nos quedaremos con la variable prom_mercurio_pez. Esto nos deja con las variables Alcalinidad, PH, Calcio, Clorofila y prom_mercurio_pez, de las cuales Alcanilidad, PH, Calcio y clorofila tienen una correlacion alta entre si, por lo que nos quedaremos con la variable Alcanilidad. Esto nos deja con las variables Alcalinidad y prom_mercurio_pez. Ya que las variables num_peces y edad tienen una correlacion baja con la variable con_med_mercurio, y no tienen una correlacion alta entre si, tambien las excluiremos.
+
+[//]: # (## Excluimos variables con correlacion alta entre ellas)
+```{r}
+data_clean <- subset(data_nums_only, select=-c(min_con_mercurio, max_con_mercurio, PH, Calcio, Clorofila, edad, num_peces))
+```
+
+## Normalidad de las variables
+### Chequeo de normalidad
+Hipotesis Shapiro-Wilk: \newline
+H0: los datos provienen de una distribucion normal \newline
+H1: los datos no provienen de una distribucion normal \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+
+
+```{r}
+hist(data_clean$prom_mercurio_pez)
+shapiro.test(data_clean$prom_mercurio_pez)
+```
+```{r}
+hist(data_clean$Alcalinidad)
+shapiro.test(data_clean$Alcalinidad)
+```
+
+Como se puede observar en las graficas y en ambas pruebas del shapiro test, ambas variables no provienen de una distribucion normal. Lo que nos obliga a normalizarlas.
+
+#### Normalizacion de prom_mercurio_pez con Box-Cox \newline
+
+```{r}
+bc_pmp <- boxcox(data_clean$prom_mercurio_pez+1~1)
+(l_pmp <- bc_pmp$x[which.max(bc_pmp$y)])
+pmp_t <- ((data_clean$prom_mercurio_pez+1)^l_pmp-1)/l_pmp
+shapiro.test(pmp_t)
+data_clean$prom_mercurio_pez <- pmp_t
+```
+
+##### Normalizacion de Alcanilidad con Box-Cox \newline
+
+```{r}
+bc_a <- boxcox(data_clean$Alcalinidad+1~1)
+(l_a <- bc_a$x[which.max(bc_a$y)])
+a_t <- ((data_clean$Alcalinidad+1)^l_a-1)/l_a
+shapiro.test(a_t)
+data_clean$Alcalinidad <- a_t
+```
+
+Como se puede observar por las pruebas de shapiro, solo la variable Alcalinidad sigue sin ser normal. Debido a esto, optaremos por no usarla en el modelo. Lo que nos deja con la variable independiente de prom_mercurio_pez.
+
+## Regresion lineal
+```{r}
+rl_best <- lm(formula = con_med_mercurio ~ prom_mercurio_pez, data = data_clean)
+summary(rl_best)
+```
+
+## Ecuacion de la regresion lineal
+
+```{r}
+cat("con_med_mercurio = ", round(rl_best$coefficients[1], 4), " +",
+    round(rl_best$coefficients[2], 4), "* prom_mercurio_pez")
+```
+
+```{r}
+plot(data_clean$prom_mercurio_pez, data_clean$con_med_mercurio)
+abline(rl_best, col = "red")
+```
+
+
+## Validacion del modelo
+### Pruebas de hipotesis
+Aunque el modelo ya nos indica que la variable prom_mercurio_pez es significativa, realizaremos las pruebas de hipotesis para asegurarnos de que el modelo es correcto.
+
+Hipotesis: \newline
+h0: beta1 = 0 \newline
+h1: beta1 != 0 \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+- Si t* > t, se rechaza H0 y se acepta H1 \newline
+- Si t* < t, se rechaza H1 y se acepta H0 \newline
+
+```{r}
+s <- summary(rl_best)
+alpha <- 0.05
+n <- nrow(data_nums_only)
+t0 <- abs(qt(alpha / 2, n - 2))
+tes <- s$coefficients[, 3]
+for (i in 2:(length(tes))) {
+  if (tes[i] > t0 & s$coefficients[i, 4] < alpha) {
+    cat("La variable", names(rl_best$coefficients)[i], "es significativa. (t* > t0 & p < alpha)\n",
+        "t* =", round(tes[i], 4), ", t0 =", round(t0, 4), "\n",
+        "p-value =", s$coefficients[i, 4], ", alpha =", alpha, "\n")
+  } else {
+    cat("La variable", names(rl_best$coefficients)[i], "no es significativa. (t* < t0 & p > alpha)\n",
+        "t* =", round(tes[i], 4), ", t0 =", round(t0, 4), "\n",
+        "p-value =", s$coefficients[i, 4], ", alpha =", alpha, "\n")
+  }
+}
+```
+
+En este caso al solo tener una variable independiente, solo existe la hipotesis para B1. Como podemos observar, la variable prom_mercurio_pez es significativa, ya que el p-value es menor que alpha y la t* es mayor que t0. Confirmando asi que la variable prom_mercurio_pez es significativa para explicar la variable con_med_mercurio.
+
+## Verificación de supuestos
+### Normalidad de los residuos
+
+Hipotesis t test: \newline
+H0: miu = 0 \newline
+H1: miu != 0 \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+
+Hipotesis Shapiro-Wilk: \newline
+H0: los datos provienen de una distribucion normal \newline
+H1: los datos no provienen de una distribucion normal \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+
+```{r}
+E<-rl_best$residuals
+Y<-rl_best$fitted.values
+
+qqnorm(E)
+qqline(E,col="red")
+
+hist(E,col="lightcyan",freq=FALSE,main="Histograma de Residuos",xlab="",ylab="Densidad", ylim=c(0, max(density(E)$y)))
+lines(density(E),col="red")
+curve(dnorm(x,mean=mean(E),sd=sd(E)), add=TRUE, col="blue",lwd=2)
+
+shapiro.test(E)
+t.test(E, alternative = "two.sided")
+```
+
+Podemos observar en el qqplot y en el histograma que los residuos siguen una distribución muy cerca a la normal. Al observar los resultados de la prueba de shapiro, se acepta la hipotesis nula y podemos concluir que los residuos siguen una distribución normal. De igual manera podemos observar que tambien se acepta la hipotesis nula en la prueba t de student concluyendo que la media es 0.
+
+### Homocedasticidad y modelo apropiado
+Hipotesis: \newline
+H0: existe homocedasticidad \newline
+H1: existe heterocedasticidad \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+
+```{r}
+plot(Y,E,ylab="Residuos",xlab="Valores estimados",pch=20,col="red")
+abline(h=0,col="red")
+text(Y[],E[],1:30,cex=0.8,pos=3,offset=0.2)
+bptest(rl_best)
+```
+
+  En la grafica podemos observar que los residuos no aparentan seguir algun tipo de patron evidente, al realizar la prueba de Breusch-Pagan podemos observar que el p-value es mayor que alpha, por lo que se acepta la hipotesis nula y podemos concluir que existe homocedasticidad.
+
+### Independencia
+Hipotesis: \newline
+H0: rho = 0 \newline
+H1: rho != 0 \newline
+Reglas de decision: \newline
+- alpha = 0.05 \newline
+- Si p-value < alpha, se rechaza H0 y se acepta H1 \newline
+- Si p-value > alpha, se rechaza H1 y se acepta H0 \newline
+
+```{r}
+n<-length(data_clean$con_med_mercurio)
+plot(c(1:n),rl_best$residuals,type="l",xlab="Orden de las observaciones",ylab="Residuos")
+abline(h=0,col="red")
+```
+
+```{r}
+dwt(rl_best,alternative="two.sided")
+```
+
+Podemos observar que los residuos no siguen un patron, por lo que podemos decir que los residuos son independientes. Tambien podemos observar que el p-value de la prueba de durbin watson es mayor que alpha, por lo que podemos aceptar la hipotesis nula y decir que los residuos son independientes.
+
+## Conclusiones
+¿Cuáles son los principales factores que influyen en el nivel de contaminación por mercurio en los peces de los lagos de Florida? \newline
+Tras realizar el analisis de regresion lineal, podemos decir que el principal factor que influye en el nivel de contaminacion por mercurio en los peces de los lagos de Florida es el promedio de mercurio en los peces de los lagos. \newline
+Ademas de esto podemos concluir que tanto el promedio como el maximo de mercurio en los peces de los lagos serian signficativos dependiendo de lo que se quiera analizar. \newline
+Esto se debe a que ambas variables tienen una correlacion alta con la variable dependiente y entre si, posiblemente resultando en modelos de regresion lineal similares al utilizarse individualmente. \newline
