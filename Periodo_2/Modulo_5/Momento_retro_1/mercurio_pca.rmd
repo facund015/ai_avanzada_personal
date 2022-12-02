@@ -1,0 +1,129 @@
+---
+title: "Procesamiento de datos multivariados"
+author: "Facundo Vecchi - A01283666"
+date: "25 de octubre de 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Carga de datos
+```{r}
+datos <- read.csv("C:/Users/facun/Documents/GitHub/ai_avanzada_personal/Periodo_2/Modulo_5/Momento_retro_1/datos.csv")
+datos_only_nums <- subset(datos, select = -c(X1, X2, X12))
+```
+
+### Importar librerías
+```{r}
+library(data.table)
+library(MVN)
+library(ggplot2)
+library(stats)
+library(factoextra)
+library(mmeln)
+```
+
+
+# 1. Realice un análisis de normalidad
+## a) Prueba de normalidad de Mardia y la prueba de Anderson Darling
+```{r}
+mvn(datos_only_nums,
+    subset = NULL,
+    mvn = "mardia",
+    covariance = FALSE,
+    showOutliers = FALSE)
+```
+
+Como se puede observar en la tabla anterior, solo se encuentran dos variables que se distribuyen individualmente como una normal, las variables X4 y X10. Asimismo podemos observar como las pruebas de Mardia indician que no se pasan las pruebas de kutosis y sesgo.
+
+## b) Realiza la prueba de Mardia y Anderson Darling de las variables que sí tuvieron normalidad en los incisos anteriores
+```{r}
+datos_subset <- subset(datos_only_nums, select = c(X4, X10))
+mvn(datos_subset,
+    subset = NULL,
+    mvn = "mardia",
+    covariance = FALSE,
+    showOutliers = FALSE)
+```
+
+Una vez ya utilizando unicamente las variables que se distribuyen como normales, se puede observar que las pruebas de Mardia indican que si se pasan las pruebas de kutosis y sesgo. Por lo que se puede concluir que las variables X4 y X10 tienen normalidad multivariada.
+
+## c) Haz la gráfica de contorno de la normal multivariada obtenida en el inciso B
+```{r}
+x <- seq(datos_subset[,1])
+y <- seq(datos_subset[,2])
+mu <- c(mean(x), mean(y))
+sigma <- cov(datos_subset)
+f <- function(x, y) dmnorm(cbind(x, y), mu, sigma)
+z <- outer(x, y, f)
+contour(x, y, z,
+        col = "red",
+        levels = c(0.01,0.03,0.05,0.07,0.1),
+        xlim = c(23, 31),
+        ylim = c(25, 29))
+```
+
+## d) Detecta datos atípicos o influyentes en la normal multivariada encontrada en el inciso B
+```{r}
+mvn(datos_subset,
+    subset = NULL ,
+    mvn = "mardia",
+    covariance = FALSE,
+    showOutliers = TRUE)
+```
+
+Utilizando la función de R mvn, al pasarle el parametro `showOutliers` como TRUE, nos muestra que no se encuentran datos atípicos o influyentes en la normal multivariada encontrada en el inciso B.
+
+# 2. Realice un análisis de componentes principales
+## a) Justifique por qué es adecuado el uso de componentes principales para analizar la base
+Este análisis de componentes principales es apropiado para este conjunto de datos ya que el objetivo final es obtener un modelo de regresión para poder predecir la contaminación del mercurio en el agua de los lagos. Trabajar con mas de 10 variables diferentes vuelve complicada la selección de estas para dicho modelo. Es por esto que a través de componentes principales, es apropiado buscar reducir la dimensionalidad de los datos para reducir la complejidad.
+
+## b) Realiza el análisis de componentes principales y justifica el número de componentes principales apropiados para reducir la dimensión de la base
+```{r}
+pca <- princomp(datos_only_nums, cor = TRUE)
+summary(pca)
+```
+
+Observando las proporciones de la varianza, se puede notar como del componente 1 al 2 hay un gran salto, pero a partir de ahí empiezan a haber saltos mas pequeños en la varianza explicada de cada componente. Esto indica que los componentes 3 a 9, aunque la varianza explicada acumulada de estos es cerca del 30%, individualmente no aportan mucho. Ya que el propósito de este análisis es reducir la dimensionalidad los mas que se pueda, se utilizaran solo los componentes 1 y 2.
+
+## c) Representa en un gráfico los vectores asociados a las variables y las puntuaciones de las observaciones de las dos primeras componentes
+```{r}
+pcaS <- as.matrix(datos_only_nums)%*%pca$loadings
+plot(pcaS[,1:2],
+     type="p",
+     main = "Puntuaciones de los primeros dos componentes principales",
+     xlab = "Componente 1",
+     ylab = "Componente 2")
+text(pcaS[,1],pcaS[,2],1:nrow(pcaS))
+biplot(pca, main = "Vectores asociados a las variables")
+```
+
+Al graficar los vectores de los componentes se puede observar que que se crearon un total de 3 grupos de variables. El de la izquierda que esta compuesto por las variables X7, X9, X10, X11, el del centro compuesto por X8 y el de la derecha compuesto por X3, X4, X5, X6. Este ultimo grupo esta compuesto por las variables de Alcalinidad, PH, Calcio y Clorofila, que son las variables que se buscan utilizar para un modelo de regresión.
+
+## d) Interprete los resultados. Explique brevemente a qué conclusiones llega con su análisis y qué significado tienen los componentes seleccionados en el contexto del problema
+```{r}
+sum_pca <- summary(pca)
+sum_pca
+pca$loadings
+proportions <- pca$sdev^2/sum(pca$sdev^2)
+barplot(proportions)
+lines(proportions, col = "red")
+
+```
+
+Con este análisis de componentes principales se concluyo que se puede reducir la dimensionalidad de los datos a dos, utilizando los componente 1 y 2 de este análisis. En esta grafica se puede notar que del componente 2 en adelante hay una gran diferencia en la variabilidad explicada por cada componente. Indicando que es viable solo utilizar los componentes 1 y 2
+
+# 3. Conclusion general
+## a) ¿Se qué forma te ayuda este nuevo análisis a contestar la pregunta principal del estudio?
+Con este analisis podemos detectar cuales son las variables que explican mejor la varianza de los datos para despues utilizar estas variables para predecir la concentracion de mercurio en los lagos.
+
+## b) ¿Cuáles son los principales factores que influyen en el nivel de contaminación por mercurio en los peces de los lagos de Florida?
+Los principales factores que influyen en el nivel de contaminación por mercurio en los peces de los lagos de Florida son las variables X3, X4, X5, y X6 que son las variables que se podrian utilizar como variables independientes para predecir la concentracion de mercurio en los lagos.
+
+## c) ¿En qué puede facilitar el estudio la normalidad encontrada en un grupo de variables detectadas?
+En que la seleccion de variables para realizar predicciones u otros tipos de estudios.
+
+## d) ¿Cómo te ayudan los componentes principales a abordar este problema?
+Al reducir la dimensionalidad de los datos, vuelve mas simple el problema, ya que se mantiene la mayor parte de la varianza de los datos y se reduce la cantidad de variables a utilizar para realizar predicciones u otros tipos de estudios.
