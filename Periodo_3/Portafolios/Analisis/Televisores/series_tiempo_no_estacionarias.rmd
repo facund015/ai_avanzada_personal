@@ -1,0 +1,230 @@
+---
+title: "A8-Series de tiempo no estacionarias. Tendencia"
+author: "Facundo Vecchi A01283666"
+date: "14 de noviembre de 2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Usa los datos de las ventas de televisores para familiarizarte con el análisis de tendencia de una serie de tiempo:
+
+| Año            |  1  |     |     |     |  2  |     |     |     |  3  |     |     |     |  4  |     |     |     |
+|----------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Trimestre      |  1  |  2  |  3  |  4  |  1  |  2  |  3  |  4  |  1  |  2  |  3  |  4  |  1  |  2  |  3  |  4  |
+| Ventas (miles) | 4.8 | 4.1 | 6.0 | 6.5 | 5.8 | 5.2 | 6.8 | 7.4 | 6.0 | 5.6 | 7.5 | 7.8 | 6.3 | 5.9 | 8.0 | 8.4 |
+
+## 1. Carga de datos
+
+```{r}
+trimestre <- 1:16
+ventas <- c(4.8,4.1,6.0,6.5,5.8,5.2,6.8,7.4,6.0,5.6,7.5,7.8,6.3,5.9,8.0,8.4)
+```
+
+## 2. Realiza el gráfico de dispersión. Observa la tendencia y los ciclos.
+
+```{r}
+plot(trimestre,ventas,
+     type = "b",
+     xlab = "Trimestre",
+     ylab = "Ventas (miles)",
+     main = "Ventas de televisores")
+```
+
+## 3. Realiza el análisis de tendencia y estacionalidad
+
+### 3.1. Descompón la serie en sus 3 componentes e interprétalos
+
+```{r}
+ts <- ts(ventas, frequency = 4)
+decomp <- decompose(ts, type = "m")
+plot(decomp)
+```
+
+## 4. Analiza el modelo lineal de la tendencia:
+
+### 4.1. Realiza el gráfico de dispersión de la tendencia
+
+```{r}
+plot(decomp$trend,
+     type = "b",
+     xlab = "Anio",
+     ylab = "Ventas (miles)",
+     main = "Tendencia")
+```
+
+### 4.2. Dibuja la recta junto con las ventas desestacionalizadas.
+
+```{r}
+y <- (decomp$x)/(decomp$seasonal)
+x <- 1:16
+Lm <- lm(y~x)
+plot(x,y,
+     type = "b",
+     xlab = "Trimestre",
+     ylab = "Ventas (miles)",
+     main = "Tendencia")
+abline(Lm, col = "red")
+```
+
+#### 4.2.1. Analiza la pertinencia del modelo lineal:
+
+```{r}
+sLm <- summary(Lm)
+sLm
+```
+
+Como se puede observar, el modelo lineal parece ajustarse bastante bien a los datos, ya que esta explicando un 92.08% de la variabilidad de los datos.
+
+#### 4.2.2. Significancia de B1
+H0: B1 = 0
+H1: B1 != 0
+
+```{r}
+sLm$coefficients[2,4]
+```
+
+Observamos que el valor de p es menor a 0.05, por lo que podemos rechazar la hipotesis nula de que B1 = 0, por lo que podemos concluir que la pendiente es significativa.
+
+#### 4.2.3. Variabilidad explicada por el modelo (c.d)
+
+```{r}
+sLm$r.squared
+```
+
+El 92.08% de la variabilidad de los datos es explicada por el modelo.
+
+#### 4.2.4. Análisis de los residuos \newline
+
+```{r}
+plot(Lm$residuals,
+     type = "b",
+     xlab = "Trimestre",
+     ylab = "Residuos",
+     main = "Residuos")
+```
+
+
+
+Los residuos parecen ser aleatorios, ya que no hay una tendencia en ellos.
+
+#### 4.2.5. Prueba de normalidad
+
+```{r}
+shapiro.test(Lm$residuals)
+```
+
+Como el valor de p es mayor a 0.05, no podemos rechazar la hipotesis nula de que los residuos siguen una distribucion normal.
+
+## 5. Calcula el CME y el EPAM (promedio de los errores porcentuales) de la predicción de la serie de tiempo.
+
+### 5.1. CME
+
+```{r}
+f <- function(x) {Lm$coefficients[1] + Lm$coefficients[2] * x}
+pred <- f(trimestre)
+cme <- mean((pred - ventas)^2, na.rm = TRUE)
+cme
+```
+
+### 5.2. EPAM
+
+```{r}
+epam <- mean(abs((pred - ventas)/ventas), na.rm = TRUE)
+epam
+```
+
+## 6. Dibuja el gráfico de los valores de las ventas y las predicciones vs el tiempo
+
+```{r}
+plot(trimestre,ventas, type = "b",
+     xlab = "Trimestre", ylab = "Ventas (miles)",
+     main = "Ventas de televisores")
+lines(trimestre, predict(Lm), col = "blue")
+y2 <- predict(Lm) * decomp$seasonal
+lines(trimestre, y2, col = "red", type = "b")
+```
+
+## 7. Concluye sobre el modelo
+
+El modelo lineal parece ajustarse bastante bien a los datos, ya que esta explicando un 92.08% de la variabilidad de los datos. Además, el valor de p es menor a 0.05, por lo que podemos rechazar la hipotesis nula de que B1 = 0, por lo que podemos concluir que la pendiente es significativa. Los residuos parecen ser aleatorios, ya que no hay una tendencia en ellos. Como el valor de p es mayor a 0.05, no podemos rechazar la hipotesis nula de que los residuos siguen una distribucion normal. El CME es de 0.029 y el EPAM es de 0.024, por lo que podemos concluir que el modelo es bastante preciso.
+
+## 8. Realiza el pronóstico para el siguiente año.
+
+### 8.1. Pronóstico para el siguiente año
+
+```{r}
+f <- function(x) {Lm$coefficients[1] + Lm$coefficients[2] * x}
+x2 <- 17:20
+y2 <- f(x2) * decomp$figure
+y2
+```
+
+### 8.2. Gráfico de las predicciones
+
+```{r}
+x3 <- 16:20
+preds <- c(ventas[16] ,y2)
+plot(x3,
+     preds,
+     type = "b",
+     xlab = "Trimestre",
+     ylab = "Ventas (miles)",
+     main = "Ventas de televisores",
+     xlim = c(1,20),
+     ylim = c(4, 9.5),
+     col = "red")
+lines(trimestre, ventas, col = "black", type = "b")
+
+```
+
+# Un Problemilla mas
+A continuación, se presentan los datos correspondientes a los últimos tres años de
+ventas trimestrales (número de ejemplares vendidos) de un libro de texto
+universitario.
+
+| Trimestre | Año 1 | Año 2 | Año 3 |
+|-----------|-------|-------|-------|
+| 1         | 1690  | 1800  | 1850  |
+| 2         | 940   | 900   | 1100  |
+| 3         | 2625  | 2900  | 2930  |
+| 4         | 2500  | 2360  | 2615  |
+
+## 1. Carga los datos en R
+
+```{r}
+ventas_libro <- c(1690, 940, 2625, 2500, 1800, 900, 2900, 2360, 1850, 1100, 2930, 2615)
+trimestre_libro <- 1:12
+ts_libro <- ts(ventas_libro, frequency = 4)
+decomp_libro <- decompose(ts_libro, type = "m")
+```
+
+## Encuentre los promedios móviles de cuatro trimestres y los promedios móviles centrados
+
+```{r}
+
+# Promedios móviles de cuatro trimestres
+prom_mov_4 <- filter(ventas_libro, rep(1/4, 4), sides = 2)
+prom_mov_4
+
+# Promedios móviles centrados
+prom_mov_c <- filter(ventas_libro, rep(1/3, 3), sides = 2)
+prom_mov_c
+```
+
+## 3. Calcule los índices estacionales de los cuatro trimestres
+
+```{r}
+# Índices estacionales de los cuatro trimestres
+ind_est <- decomp_libro$figure
+ind_est
+```
+
+## 4. ¿Cuándo obtiene la editorial el mayor índice estacional? ¿Parece razonable este resultado? ¿Por qué?
+
+El mayor índice estacional se obtiene en el trimestre 3, ya que es el trimestre con mayor venta de libros. Este resultado es razonable, ya que al final del trimestre 3 es cuando se empieza el ciclo escolar en Mexico.
+
+
+
